@@ -1,25 +1,25 @@
 ###############################################################################################################
-#############################################Variables à modifier##############################################
+#############################################Modify $SiteURL and $FolderSiteRelativeURL #######################
 ###############################################################################################################
 
-#Variables de sites et de dossier
+#Your SharePoint site
 $SiteURL = "https://yourtenant.sharepoint.com/sites/yoursite"
 
-#Variable finale du dossier à analyser
+#Your folder
 $FolderSiteRelativeURL = "/yourlibrary/rootfolder/subfolder"
 
 ###############################################################################################################
-#############################################Début de l'exécution##############################################
+#############################################Start to execute##################################################
 ###############################################################################################################
 
-#Variables de nom de fichiers et de directory
+#Folders and files Names
 $Date = Get-Date -Format "dd_MM_yyyy HH.mm.ss"
 $CorrectedName = $FolderSiteRelativeURL -replace "/", "  "
 $TempDirectory = $env:TEMP 
 $CsvName = "$TempDirectory\Tracker - $Date.csv"
 $CsvName2 = "$TempDirectory\Count - $Date.csv"
 
-#Fonction de sélection du dossier de destination
+#Function to select where the excel is stored
 Function Get-Folder($initialDirectory)
 {
     [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
@@ -32,30 +32,28 @@ Function Get-Folder($initialDirectory)
     }
     return $y
 }
-#Variable du chemin de sauvegarde du dossier
+#Result of the function below
 $TrackerPath = Get-Folder
 
-#Connexion à SharePointPNP
+#Connect to SharePoint
 Connect-PnPOnline -Url $SiteURL -Credentials (Get-Credential)
 
-#Variables utiles à PnP
+#Needed for later
 $Web = Get-PnPWeb
 $Folder = Get-PnPFolder -Url $FolderSiteRelativeURL
  
-#Fonction récursive de liste des fichiers
+#Recursive function to get files in folders and count them
 Function Catch-PnPFolder([Microsoft.SharePoint.Client.Folder]$Folder)
 {
-	### Début du inception mode ###
-    #Obtenir l'url relative du dossier
     $FolderSiteRelativeURL = $Folder.ServerRelativeUrl.Replace($web.ServerRelativeUrl,"")
-	Write-Host -f Green "Processing on folder : "($FolderSiteRelativeURL.Substring(20))
-    #Recherche les fichiers dans le dossier
+	Write-Host -f Green "Processing on folder : "($FolderSiteRelativeURL)
+    #Find files in folder
     $Files = Get-PnPFolderItem -FolderSiteRelativeUrl $FolderSiteRelativeURL -ItemType File
 	$NameOfFiles = $Folder.ServerRelativeUrl
 	$NumberOfFiles = $Files.Count
 	Write-Host -f Green "Number of files in folder : $NumberOfFiles"
 	
-	#Compter les fichiers dans chaque dossier
+	#Count files in the folders and export to csv
 	If ($NumberOfFiles -ge 0)
 	{
 	$Count = [PSCustomObject]@{
@@ -65,56 +63,54 @@ Function Catch-PnPFolder([Microsoft.SharePoint.Client.Folder]$Folder)
 	$Count | Select @{Name="Directory";Expression={($_.Folder )}}, 'Number of Files', Comments | Export-Csv -Path $CsvName2 -NoTypeInformation -Append -Force -Encoding UTF8
 	
 	}
-	#Export des fichiers vers le csv
+	#Get name of files in the folder and export to csv
     ForEach ($File in $Files)
     {
-        #Exporte les données à la suite dans un csv
 	    $File  | Select @{Name="Parent Directory";Expression={($_.ServerRelativeUrl -replace "/[^/]*$", "")}}, Name, TimeLastModified, Comments | Export-Csv -Path $CsvName -NoTypeInformation -Append -Force -Encoding UTF8
 	}
  
-    #Recherche les sous-dossiers dans le dossier
+    #Look for subfolders in the folder
     $SubFolders = Get-PnPFolderItem -FolderSiteRelativeUrl $FolderSiteRelativeURL -ItemType Folder
     Foreach($SubFolder in $SubFolders)
     {
-        #Exclure les dossiers "Forms" et ceux avec commançant par "_"
+        #Exclude folders with the name "Forms" and starting by "_"
         If(($SubFolder.Name -ne "Forms") -and (-Not($SubFolder.Name.StartsWith("_"))))
         {
-            #Rappel la fonction pour la rendre récursive (inception mode)
+            #Call-back the function on the subfolder to make it recursive
             Catch-PnPFolder -Folder $SubFolder
-	### Fin du inception mode ###
         }
     }
 } 
-#Appel de la fonction de recherche
+#Call the Function on the root folder you selected
 Catch-PnPFolder -Folder $Folder
 
-#Signal de fin de recherches des fichiers
+#Tell that the function process ended
 Write-Host ""
 Write-Host ""
 Write-Host -f Blue "Processing and extracting datas, please wait... "
 
-#Changement pour le fichier Tracker.csv
+#sorting csv "Tracker" by Parent directory
 Rename-Item "$CsvName" "$CsvName.old"
 Import-Csv -Path "$CsvName.old" | sort "Parent Directory"| Export-Csv -Path "$CsvName" -NoTypeInformation -Encoding UTF8
 Remove-Item "$CsvName.old"
 
-#Changement pour le fichier Count.csv
+#sorting csv "Count" by Directory
 Rename-Item "$CsvName2" "$CsvName2.old"
 Import-Csv -Path "$CsvName2.old" | sort "Directory" | Export-Csv -Path "$CsvName2" -NoTypeInformation -Encoding UTF8
 Remove-Item "$CsvName2.old"
 
-#Conversion finale des csv en xlsx 
+#Convert and merge both csv to an excel
 Import-Csv "$CsvName" | Export-Excel -Path "$TrackerPath\$CorrectedName - $Date.xlsx" -AutoSize -TableStyle Medium4 -WorkSheetname "Tracker"
 Import-Csv "$CsvName2" | Export-Excel -Path "$TrackerPath\$CorrectedName - $Date.xlsx" -AutoSize -TableStyle Medium4 -WorkSheetname "Count"
 
-#Supression des csv restants
+#delete both csv
 Remove-Item "$CsvName"
 Remove-Item "$CsvName2"
 
-#Emettre un bip à la fin de l'exécution
+#Play a sound to let you know that your excel is ready
 [System.Media.SystemSounds]::Beep.Play()
 
-#Appuie sur une touche avant de quitter la console
+#Hit a key on your keyboard to open the excel and close powershell
 Write-Host ""
 Write-Host ""
 Write-Host "End of script execution" 
