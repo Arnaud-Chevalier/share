@@ -1,0 +1,35 @@
+#Fonction de calcul de la conjecture de Syracuse
+Function Calc ($number) {
+	#Si chiffre pair diviser par 2
+	if ($number % 2 -eq 0){
+	$result = $number / 2
+	$i = $i + 1
+	[void]$myArray.Add($result)
+		#Si chiffre impair multiplier par 3 et ajouter 1
+		}Else{	
+		$result = $number * 3 + 1
+		$i = $i + 1
+		[void]$myArray.Add($result)
+		} 
+				#Rappel de la fonction pour la rendre récursive
+				if ($result -ne 1){
+				Calc $result
+				#Arret quand le chiffre 1 est atteint
+				}Else{write-host "Number 1 is reached"
+				write-host "List of steps : "
+				$myarray
+				$max = $myarray  | measure -Maximum
+				write-host "Flight Time = " $i
+				write-host "Maximum altitude : " $max.maximum
+				write-host ""
+				}
+}
+#variable de valeurs initiales
+$numbers = 1..1000
+#itération sur les valeurs
+foreach ($number in $numbers) {
+$i = 0
+$myarray = [System.Collections.ArrayList]::new()
+write-host "Start calculus with number : " $number
+Calc $number
+}
